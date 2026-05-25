@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Práctica 4.2: Escenario VR - Aula Y8</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            background-color: #f8f9fa;
+            margin: 0;
+            overflow-x: hidden;
+        }
+        
+        /* Contenedor del escenario 3D */
+        #canvas-container {
+            flex: 1;
+            width: 100%;
+            position: relative;
+            background: radial-gradient(circle at center, #2a2a2a 0%, #1a1a1a 100%);
+        }
+        
+        /* Ajuste para que el canvas ocupe el contenedor dinámico */
+        canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+            outline: none;
+        }
+
+        /* Diseño estilizado y posicionamiento correcto para el botón VR */
+        #VRButton {
+            z-index: 10;
+            bottom: 110px !important; 
+            padding: 12px 24px !important;
+            border: 2px solid hsl(125, 98%, 52%) !important;
+            border-radius: 8px !important;
+            background: rgba(33, 37, 41, 0.9) !important;
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            letter-spacing: 1px;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s ease !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        #VRButton:hover {
+            background: #0d6efd !important;
+            color: #ffffff !important;
+            box-shadow: 0 0 15px rgba(53, 253, 13, 0.5);
+            transform: scale(1.05);
+        }
+
+        .navbar {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        }
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="#">ITP - Graficación</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <span class="nav-link active fw-semibold">Tema 4.2: Creación de escenarios VR</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div id="canvas-container"></div>
+
+    <footer class="bg-dark text-white text-center py-3 mt-auto border-top border-secondary">
+        <div class="container">
+            <p class="mb-1"><strong>Programador:</strong> Nicolas Vite Jesus</p>
+            <p class="mb-1"><strong>Materia:</strong> Graficación | <strong>Docente:</strong> Ing. Víctor Manuel Pinedo Fernández</p>
+            <small class="text-muted">Instituto Tecnológico de Pachuca &copy; 2026 - Fecha: 24 / Mayo / 2026</small>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+        const container = document.getElementById('canvas-container');
+        let scene, camera, renderer, controls, playerRig;
+
+        init();
+
+        function init() {
+            // 1. CONFIGURACIÓN DE LA ESCENA
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a);
+
+            // 2. ARQUITECTURA WEBXR (CAMERA RIG)
+            camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 100);
+            
+            playerRig = new THREE.Group();
+            scene.add(playerRig);
+            playerRig.add(camera);
+
+            // Altura por defecto del visor sobre el Rig
+            camera.position.set(0, 1.6, 0);
+
+            // 3. RENDERER CON PIPELINE AVANZADO PARA MATERIALES PBR
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.xr.enabled = true;
+            
+            // Corrección de gamas cromáticas para evitar texturas lavadas o negras de SketchUp
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.3;
+            
+            container.appendChild(renderer.domElement);
+            document.body.appendChild(VRButton.createButton(renderer));
+
+            // 4. ILUMINACIÓN AMBIENTAL COMPUESTA (Elimina sombras duras en interiores)
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.8);
+            scene.add(ambientLight);
+
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+            hemiLight.position.set(0, 20, 0);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(5, 10, 7.5);
+            scene.add(dirLight);
+
+            // 5. CONTROLES ESCRITORIO ORBITALES
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            // 6. CARGA DINÁMICA DEL ARCHIVO DEL USUARIO
+            const loader = new GLTFLoader();
+            loader.load('aula-y8.glb', function (gltf) {
+                const model = gltf.scene;
+                
+                // Corrección algorítmica de normales y opacidad en caras ocultas heredadas de SketchUp
+                model.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        child.material.side = THREE.DoubleSide; 
+                        child.material.metalness = 0.0; // Elimina el acabado metálico oscuro indeseado
+                        child.material.roughness = 0.8;
+                        child.material.needsUpdate = true;
+                    }
+                });
+
+                scene.add(model);
+
+                // Algoritmo para posicionar automáticamente la cámara en el centro geométrico del aula
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                
+                // Situar al usuario en las coordenadas X y Z del medio, pisando la base del modelo
+                playerRig.position.set(center.x, box.min.y, center.z);
+                
+                // Apuntar la vista orbital hacia el centro de la habitación a la altura de los ojos
+                controls.target.set(center.x, box.min.y + 1.6, center.z - 0.1);
+                controls.update();
+                
+                console.log('Modelo aula-y8.glb cargado con el pipeline de renderizado optimizado.');
+            }, undefined, function (error) {
+                console.error('Error al cargar el archivo GLB:', error);
+            });
+
+            // 7. MANEJO DEL AJUSTE DE VENTANA (RESIZE)
+            window.addEventListener('resize', onWindowResize, false);
+
+            // 8. CICLO DE ANIMACIÓN COMPATIBLE CON WEBXR
+            renderer.setAnimationLoop(renderCycle);
+        }
+
+        function onWindowResize() {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function renderCycle() {
+            // Solo procesa los controles si la sesión inmersiva VR no está activa
+            if (!renderer.xr.isPresenting) {
+                controls.update();
+            }
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
